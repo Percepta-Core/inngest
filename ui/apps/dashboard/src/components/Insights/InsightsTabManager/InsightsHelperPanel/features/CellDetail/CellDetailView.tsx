@@ -49,6 +49,9 @@ function CellValueCodeBlock({
 
     if (columnType === 'date') {
       const date = new Date(value);
+      if (isNaN(date.getTime())) {
+        return { content: 'Invalid date', language: 'plaintext' };
+      }
       return {
         content: `${date.toLocaleString()}\n${date.toISOString()}`,
         language: 'plaintext',
