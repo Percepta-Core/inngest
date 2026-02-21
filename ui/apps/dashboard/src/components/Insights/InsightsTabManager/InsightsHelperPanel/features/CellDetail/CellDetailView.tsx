@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { CodeBlock } from '@inngest/components/CodeBlock';
+import { Time } from '@inngest/components/Time';
 
 import { useCellDetailContext } from '@/components/Insights/CellDetailContext';
 import { getFormattedJSONObjectOrArrayString } from '@/components/Insights/InsightsDataTable/states/ResultsState/json';
@@ -26,7 +27,7 @@ export function CellDetailView() {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-4 py-1">
-        <CellValueCodeBlock
+        <CellValueDisplay
           columnType={selectedCell.columnType}
           value={selectedCell.value}
         />
@@ -35,7 +36,7 @@ export function CellDetailView() {
   );
 }
 
-function CellValueCodeBlock({
+function CellValueDisplay({
   columnType,
   value,
 }: {
@@ -43,41 +44,31 @@ function CellValueCodeBlock({
   value: string | number | Date | null;
 }) {
   const { content, language } = useMemo(() => {
-    if (value == null) {
-      return { content: 'null', language: 'plaintext' };
-    }
-
-    if (columnType === 'date') {
-      const date = new Date(value);
-      if (isNaN(date.getTime())) {
-        return { content: 'Invalid date', language: 'plaintext' };
-      }
-      return {
-        content: `${date.toLocaleString()}\n${date.toISOString()}`,
-        language: 'plaintext',
-      };
-    }
-
-    if (columnType === 'string') {
+    if (columnType === 'string' && value != null) {
       const formatted = getFormattedJSONObjectOrArrayString(String(value));
       if (formatted !== null) {
         return { content: formatted, language: 'json' };
       }
       return { content: String(value), language: 'plaintext' };
     }
-
-    return { content: String(value), language: 'plaintext' };
+    return { content: String(value ?? 'null'), language: 'plaintext' };
   }, [columnType, value]);
+
+  if (value == null) {
+    return (
+      <CodeBlock.Wrapper>
+        <CodeBlock tab={{ content: 'null', language: 'plaintext', readOnly: true }} />
+      </CodeBlock.Wrapper>
+    );
+  }
+
+  if (columnType === 'date') {
+    return <Time value={new Date(value)} />;
+  }
 
   return (
     <CodeBlock.Wrapper>
-      <CodeBlock
-        tab={{
-          content,
-          language,
-          readOnly: true,
-        }}
-      />
+      <CodeBlock tab={{ content, language, readOnly: true }} />
     </CodeBlock.Wrapper>
   );
 }
