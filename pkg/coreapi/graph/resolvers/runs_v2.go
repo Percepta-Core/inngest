@@ -21,8 +21,14 @@ const (
 )
 
 func (qr *queryResolver) Runs(ctx context.Context, num int, cur *string, order []*models.RunsV2OrderBy, filter models.RunsFilterV2, preview *bool) (*models.RunsV2Connection, error) {
+	l := logger.StdlibLogger(ctx)
+	resolverStart := time.Now()
+
 	opts := toRunsQueryOpt(num, cur, order, filter, preview)
+
+	t0 := time.Now()
 	runs, err := qr.Data.GetTraceRuns(ctx, opts)
+	l.Info("[perf] Runs resolver: GetTraceRuns", "duration_ms", time.Since(t0).Milliseconds(), "count", len(runs), "preview", opts.Preview)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving runs: %w", err)
 	}
@@ -126,7 +132,9 @@ func (qr *queryResolver) Runs(ctx context.Context, num int, cur *string, order [
 		})
 	}
 
+	t1 := time.Now()
 	evts, err := qr.Data.GetEventsByInternalIDs(ctx, evtIDs)
+	l.Info("[perf] Runs resolver: GetEventsByInternalIDs", "duration_ms", time.Since(t1).Milliseconds(), "event_count", len(evtIDs))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving events associated with runs: %w", err)
 	}
@@ -146,6 +154,8 @@ func (qr *queryResolver) Runs(ctx context.Context, num int, cur *string, order [
 		}(e)
 	}
 	wg.Wait()
+
+	l.Info("[perf] Runs resolver: total", "duration_ms", time.Since(resolverStart).Milliseconds(), "edges", len(edges))
 
 	pageInfo := &models.PageInfo{
 		HasNextPage: total == int(opts.Items),
@@ -408,8 +418,11 @@ func (qr *queryResolver) RunTrigger(ctx context.Context, runID string) (*models.
 }
 
 func (r *runsV2ConnResolver) TotalCount(ctx context.Context, obj *models.RunsV2Connection, preview *bool) (int, error) {
+	l := logger.StdlibLogger(ctx)
+	t0 := time.Now()
 	opts := toRunsQueryOpt(0, obj.After, obj.OrderBy, obj.Filter, preview)
 	count, err := r.Data.GetTraceRunsCount(ctx, opts)
+	l.Info("[perf] TotalCount resolver", "duration_ms", time.Since(t0).Milliseconds(), "count", count)
 	if err != nil {
 		return 0, fmt.Errorf("error retrieving count for runs: %w", err)
 	}
