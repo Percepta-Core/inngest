@@ -17,6 +17,18 @@ func init() {
 	_ = mime.AddExtensionType(".js", "application/javascript")
 }
 
+// StaticFS returns the embedded filesystem containing the built UI assets.
+func StaticFS() embed.FS {
+	return static
+}
+
+// Serve implements SPA routing for Tanstack assets, exported for use by
+// the ui-only command. It returns the file bytes for the given request path,
+// falling back to _shell.html for client-side routing.
+func Serve(requestPath string) []byte {
+	return serve(context.Background(), requestPath)
+}
+
 // serve implements SPA routing for Tanstack assets:
 // - Serves static files from static/client if they exist
 // - Falls back to _shell.html for all other routes (client-side routing)

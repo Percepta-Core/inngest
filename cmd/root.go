@@ -8,6 +8,7 @@ import (
 	"github.com/inngest/inngest/cmd/debug"
 	"github.com/inngest/inngest/cmd/devserver"
 	"github.com/inngest/inngest/cmd/start"
+	"github.com/inngest/inngest/cmd/ui"
 	"github.com/inngest/inngest/cmd/version"
 	"github.com/inngest/inngest/pkg/api/tel"
 	inncli "github.com/inngest/inngest/pkg/cli"
@@ -79,6 +80,7 @@ func execute() {
 			version.Command(),
 			start.Command(),
 			debug.Command(),
+			ui.Command(),
 		},
 	}
 
