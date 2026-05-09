@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"cuelang.org/go/cue"
 	cueerrors "cuelang.org/go/cue/errors"
@@ -76,6 +77,9 @@ func loadAll(ctx context.Context, locs ...string) (*Config, error) {
 }
 
 func read(ctx context.Context, path string) (*Config, error) {
+	if strings.Contains(path, "..") {
+		return nil, fmt.Errorf("invalid file path")
+	}
 	path, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
