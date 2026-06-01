@@ -407,8 +407,9 @@ func (c *connectGatewaySvc) Run(ctx context.Context) error {
 
 	addr := fmt.Sprintf(":%d", c.gatewayPublicPort)
 	server := &http.Server{
-		Addr:    addr,
-		Handler: c.gatewayRoutes,
+		Addr:        addr,
+		Handler:     c.gatewayRoutes,
+		ReadTimeout: 5 * time.Second,
 	}
 
 	go func() {

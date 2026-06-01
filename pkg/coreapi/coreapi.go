@@ -142,8 +142,9 @@ func (a *CoreAPI) Resolver() *resolvers.Resolver {
 
 func (a *CoreAPI) Start(ctx context.Context) error {
 	a.server = &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", a.config.CoreAPI.Addr, a.config.CoreAPI.Port),
-		Handler: a.Router,
+		Addr:        fmt.Sprintf("%s:%d", a.config.CoreAPI.Addr, a.config.CoreAPI.Port),
+		Handler:     a.Router,
+		ReadTimeout: 5 * time.Second,
 	}
 
 	a.log.Info("starting server", "addr", a.server.Addr)
