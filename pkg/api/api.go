@@ -101,8 +101,9 @@ func (a *API) AddRoutes() {
 
 func (a *API) Start(ctx context.Context) error {
 	a.server = &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", a.config.EventAPI.Addr, a.config.EventAPI.Port),
-		Handler: a.Router,
+		Addr:        fmt.Sprintf("%s:%d", a.config.EventAPI.Addr, a.config.EventAPI.Port),
+		Handler:     a.Router,
+		ReadTimeout: 5 * time.Second,
 	}
 	a.log.Info("starting server", "addr", a.server.Addr)
 
