@@ -33,7 +33,7 @@
     "env:rm": "npx vercel env rm"
   },
   "dependencies": {
-    "@clerk/tanstack-react-start": "^0.29.1",
+    "@clerk/tanstack-react-start": "^1.4.20",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@headlessui/react": "^1.7.18",
     "@headlessui/tailwindcss": "^0.1.2",
@@ -70,7 +70,7 @@
     "graphql": "16.8.1",
     "graphql-config": "^4.5.0",
     "graphql-request": "^6.1.0",
-    "inngest": "^3.48.0",
+    "inngest": "^3.54.0",
     "ky": "^0.33.3",
     "launchdarkly-react-client-sdk": "^3.0.8",
     "mustache": "^4.2.0",
