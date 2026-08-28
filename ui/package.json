@@ -83,7 +83,19 @@
       "minimatch@<5.0.0": ">=5.0.0",
       "nodemon": ">=3.0.0",
       "nodemon>minimatch": "3.1.2",
-      "nodemon>brace-expansion": "1.1.11"
+      "nodemon>brace-expansion": "1.1.11",
+      "@opentelemetry/exporter-prometheus@0": "0.217.0",
+      "launchdarkly-js-sdk-common@5": "5.8.1",
+      "launchdarkly-js-sdk-common>uuid": "11.1.1",
+      "protobufjs@8": "8.6.5",
+      "@opentelemetry/propagator-jaeger@2": "2.9.0",
+      "@opentelemetry/resource-detector-gcp@0": "0.47.0",
+      "@opentelemetry/sdk-node@0": "0.217.0",
+      "h3@2": "2.0.1-rc.15",
+      "h3@2.0.1-rc.5": "2.0.1-rc.15",
+      "js-cookie@3": "3.0.7",
+      "lodash@4": "4.18.1",
+      "lodash-es@4": "4.18.1"
     },
     "onlyBuiltDependencies": [
       "@sentry/cli",
