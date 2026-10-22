@@ -15,14 +15,17 @@ function DefaultCatchBoundary({ error }: ErrorComponentProps) {
   });
   const status = useSystemStatus();
 
-  console.error(error.message);
+  // @tanstack/react-router >=1.170 types `error` as unknown; `Error` is shadowed by the component import.
+  const message = error instanceof globalThis.Error ? error.message : String(error);
 
-  const authError = error.message.includes('UNAUTHENTICATED');
+  console.error(message);
+
+  const authError = message.includes('UNAUTHENTICATED');
 
   return (
     <div className="flex flex-col justify-start items-start gap">
       <StatusBanner status={status} />
-      <Error message={error.message} />
+      <Error message={message} />
 
       <div className="flex gap-2 justif-start items-center flex-wrap mx-4">
         <Button
