@@ -41,7 +41,7 @@ func (e Event) Empty() bool {
 }
 
 // writeEvent writes the event to w, and flushes.
-func writeEvent(w http.ResponseWriter, evt Event) (int, error) {
+func writeEvent(w io.Writer, evt Event) (int, error) {
 	var b bytes.Buffer
 	if evt.Name != "" {
 		fmt.Fprintf(&b, "event: %s\n", evt.Name)
@@ -52,34 +52,21 @@ func writeEvent(w http.ResponseWriter, evt Event) (int, error) {
 	if evt.Retry != "" {
 		fmt.Fprintf(&b, "retry: %s\n", evt.Retry)
 	}
-	// Write the payload directly into a pre-grown buffer to avoid the extra
-	// copy from string(evt.Data) and repeated buffer regrowths.
-	b.Grow(len("data: \n\n") + len(evt.Data))
-	b.WriteString("data: ")
-	b.Write(evt.Data)
-	b.WriteString("\n\n")
+	fmt.Fprintf(&b, "data: %s\n\n", string(evt.Data))
 	n, err := w.Write(b.Bytes())
-	rc := http.NewResponseController(w)
-	// Ignore returned error as flushing is best-effort.
-	_ = rc.Flush()
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
 	return n, err
 }
 
-// DefaultMaxEventSize is the default maximum number of bytes buffered while
-// reading a single server-sent event before the input is rejected.
-const DefaultMaxEventSize = 16 << 20 // 16 MiB
-
-// scanEventsLimited iterates SSE events in the given reader, buffering at most
-// maxEventSize bytes per event. When maxEventSize > 0, an event is reported as
-// [errMalformedEvent] once its size exceeds it; a non-positive maxEventSize
-// disables the cap.
-//
-// The iterated error is terminal: if encountered, the stream is corrupt or
-// broken and should no longer be used.
+// scanEvents iterates SSE events in the given scanner. The iterated error is
+// terminal: if encountered, the stream is corrupt or broken and should no
+// longer be used.
 //
 // TODO(rfindley): consider a different API here that makes failure modes more
 // apparent.
-func scanEventsLimited(r io.Reader, maxEventSize int) iter.Seq2[Event, error] {
+func scanEvents(r io.Reader) iter.Seq2[Event, error] {
 	reader := bufio.NewReader(r)
 
 	// TODO: investigate proper behavior when events are out of order, or have
@@ -102,9 +89,8 @@ func scanEventsLimited(r io.Reader, maxEventSize int) iter.Seq2[Event, error] {
 		//  - Lines starting with ":" are ignored.
 		//  - Records are terminated with two consecutive newlines.
 		var (
-			evt        Event
-			dataBuf    *bytes.Buffer // if non-nil, preceding field was also data
-			eventBytes int           // bytes read for the current, in-progress event
+			evt     Event
+			dataBuf *bytes.Buffer // if non-nil, preceding field was also data
 		)
 		yieldEvent := func() bool {
 			if dataBuf != nil {
@@ -121,20 +107,11 @@ func scanEventsLimited(r io.Reader, maxEventSize int) iter.Seq2[Event, error] {
 			return true
 		}
 		for {
-			budget := -1
-			if maxEventSize > 0 {
-				budget = maxEventSize - eventBytes
-			}
-			line, err := readEventLine(reader, budget)
-			if errors.Is(err, errEventTooLarge) {
-				yield(Event{}, fmt.Errorf("%w: SSE event exceeded %d bytes without terminating", errMalformedEvent, maxEventSize))
-				return
-			}
+			line, err := reader.ReadBytes('\n')
 			if err != nil && !errors.Is(err, io.EOF) {
 				yield(Event{}, fmt.Errorf("error reading event: %v", err))
 				return
 			}
-			eventBytes += len(line)
 			line = bytes.TrimRight(line, "\r\n")
 			isEOF := errors.Is(err, io.EOF)
 
@@ -142,7 +119,6 @@ func scanEventsLimited(r io.Reader, maxEventSize int) iter.Seq2[Event, error] {
 				if !yieldEvent() {
 					return
 				}
-				eventBytes = 0 // reset the budget between events
 				if isEOF {
 					return
 				}
@@ -341,31 +317,6 @@ var ErrEventsPurged = errors.New("data purged")
 // transient I/O errors which may be retryable.
 var errMalformedEvent = errors.New("malformed event")
 
-// errEventTooLarge is returned by [readEventLine] when a single line would
-// exceed the remaining per-event byte budget.
-var errEventTooLarge = errors.New("SSE event exceeded maximum size")
-
-// readEventLine reads a single '\n'-terminated line from r. When budget >= 0 it
-// reads at most budget bytes, returning [errEventTooLarge] once that budget is
-// exceeded before a newline arrives.
-func readEventLine(r *bufio.Reader, budget int) ([]byte, error) {
-	if budget < 0 {
-		return r.ReadBytes('\n')
-	}
-	var line []byte
-	for {
-		frag, err := r.ReadSlice('\n')
-		if len(line)+len(frag) > budget {
-			return nil, errEventTooLarge
-		}
-		line = append(line, frag...)
-		if errors.Is(err, bufio.ErrBufferFull) {
-			continue // looking for delim
-		}
-		return line, err
-	}
-}
-
 // After implements [EventStore.After].
 func (s *MemoryEventStore) After(_ context.Context, sessionID, streamID string, index int) iter.Seq2[[]byte, error] {
 	// Return the data items to yield.
@@ -381,15 +332,12 @@ func (s *MemoryEventStore) After(_ context.Context, sessionID, streamID string, 
 		if !ok {
 			return nil, fmt.Errorf("MemoryEventStore.After: unknown stream ID %v in session %q", streamID, sessionID)
 		}
-		start := (index + 1) - dl.first
-		if start < 0 {
+		start := index + 1
+		if dl.first > start {
 			return nil, fmt.Errorf("MemoryEventStore.After: index %d, stream ID %v, session %q: %w",
 				index, streamID, sessionID, ErrEventsPurged)
 		}
-		if start >= len(dl.data) {
-			return nil, nil
-		}
-		return slices.Clone(dl.data[start:]), nil
+		return slices.Clone(dl.data[start-dl.first:]), nil
 	}
 
 	return func(yield func([]byte, error) bool) {
@@ -428,11 +376,10 @@ func (s *MemoryEventStore) purge() {
 			for _, dl := range sm {
 				if dl.size > 0 {
 					r := dl.removeFirst()
-					// Even if we remove an empty chunk, that's
-					// still progress. There may be non-empty
-					// chunks after it.
-					changed = true
-					s.nBytes -= r
+					if r > 0 {
+						changed = true
+						s.nBytes -= r
+					}
 				}
 			}
 		}

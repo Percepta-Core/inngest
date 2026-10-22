@@ -13,8 +13,6 @@ import (
 	"slices"
 	"sync"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
 // Logging levels.
@@ -68,19 +66,7 @@ func compareLevels(l1, l2 LoggingLevel) int {
 	return cmp.Compare(mcpLevelToSlog(l1), mcpLevelToSlog(l2))
 }
 
-type logLevelContextKey struct{}
-
-func logLevelFromContext(ctx context.Context) (LoggingLevel, bool) {
-	v, ok := ctx.Value(logLevelContextKey{}).(LoggingLevel)
-	return v, ok
-}
-
 // LoggingHandlerOptions are options for a LoggingHandler.
-//
-// Deprecated: the logging feature is deprecated as of protocol version
-// 2026-07-28 (SEP-2577). It remains functional during the deprecation window
-// (at least twelve months). See
-// https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging.
 type LoggingHandlerOptions struct {
 	// The value for the "logger" field of logging notifications.
 	LoggerName string
@@ -91,21 +77,16 @@ type LoggingHandlerOptions struct {
 }
 
 // A LoggingHandler is a [slog.Handler] for MCP.
-//
-// Deprecated: the logging feature is deprecated as of protocol version
-// 2026-07-28 (SEP-2577). It remains functional during the deprecation window
-// (at least twelve months). See
-// https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging.
 type LoggingHandler struct {
 	opts LoggingHandlerOptions
 	ss   *ServerSession
 	// Ensures that the buffer reset is atomic with the write (see Handle).
 	// A pointer so that clones share the mutex. See
 	// https://github.com/golang/example/blob/master/slog-handler-guide/README.md#getting-the-mutex-right.
-	mu      *sync.Mutex
-	limiter *rate.Limiter // for rate-limiting
-	buf     *bytes.Buffer
-	handler slog.Handler
+	mu              *sync.Mutex
+	lastMessageSent time.Time // for rate-limiting
+	buf             *bytes.Buffer
+	handler         slog.Handler
 }
 
 // ensureLogger returns l if non-nil, otherwise a discard logger.
@@ -118,11 +99,6 @@ func ensureLogger(l *slog.Logger) *slog.Logger {
 
 // NewLoggingHandler creates a [LoggingHandler] that logs to the given [ServerSession] using a
 // [slog.JSONHandler].
-//
-// Deprecated: the logging feature is deprecated as of protocol version
-// 2026-07-28 (SEP-2577). It remains functional during the deprecation window
-// (at least twelve months). See
-// https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging.
 func NewLoggingHandler(ss *ServerSession, opts *LoggingHandlerOptions) *LoggingHandler {
 	var buf bytes.Buffer
 	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{
@@ -142,9 +118,6 @@ func NewLoggingHandler(ss *ServerSession, opts *LoggingHandlerOptions) *LoggingH
 	}
 	if opts != nil {
 		lh.opts = *opts
-		if opts.MinInterval > 0 {
-			lh.limiter = rate.NewLimiter(rate.Every(opts.MinInterval), 1)
-		}
 	}
 	return lh
 }
@@ -153,9 +126,6 @@ func NewLoggingHandler(ss *ServerSession, opts *LoggingHandlerOptions) *LoggingH
 func (h *LoggingHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	// This is also checked in ServerSession.LoggingMessage, so checking it here
 	// is just an optimization that skips building the JSON.
-	if mcpLevel, ok := logLevelFromContext(ctx); ok {
-		return mcpLevel != "" && level >= mcpLevelToSlog(mcpLevel)
-	}
 	h.ss.mu.Lock()
 	mcpLevel := h.ss.state.LogLevel
 	h.ss.mu.Unlock()
@@ -187,7 +157,11 @@ func (h *LoggingHandler) Handle(ctx context.Context, r slog.Record) error {
 
 func (h *LoggingHandler) handle(ctx context.Context, r slog.Record) error {
 	// Observe the rate limit.
-	if h.limiter != nil && !h.limiter.Allow() {
+	// TODO(jba): use golang.org/x/time/rate.
+	h.mu.Lock()
+	skip := time.Since(h.lastMessageSent) < h.opts.MinInterval
+	h.mu.Unlock()
+	if skip {
 		return nil
 	}
 
@@ -209,6 +183,10 @@ func (h *LoggingHandler) handle(ctx context.Context, r slog.Record) error {
 	if err != nil {
 		return err
 	}
+
+	h.mu.Lock()
+	h.lastMessageSent = time.Now()
+	h.mu.Unlock()
 
 	params := &LoggingMessageParams{
 		Logger: h.opts.LoggerName,
