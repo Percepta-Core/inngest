@@ -129,9 +129,9 @@ func NewOTLPMeterProvider(ctx context.Context, svc string) (*meter, error) {
 }
 
 // noCardinalityLimit disables the SDK's per-instrument cardinality limit. The
-// OpenTelemetry metrics SDK applies a default of 2000 attribute sets per
-// instrument since v1.43 and folds the excess into otel.metric.overflow; the
-// previously vendored SDK applied no limit, and our account/function labelled
+// OpenTelemetry metrics SDK (1.44.0) applies a default of 2000 attribute sets
+// per instrument and folds the excess into otel.metric.overflow; the SDK
+// vendored before (1.37.0) had no limit, and our account/function labelled
 // metrics (batch scheduling, connect durations) can exceed 2000 combinations.
 const noCardinalityLimit = 0
 
