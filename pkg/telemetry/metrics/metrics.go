@@ -57,10 +57,8 @@ func NewPrometheusMeterProvider(ctx context.Context, svc string) (*meter, error)
 
 	mp := metric.NewMeterProvider(
 		metric.WithReader(exp),
-		metric.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(svc),
-		)),
+		metric.WithResource(serviceResource(svc)),
+		metric.WithCardinalityLimit(noCardinalityLimit),
 	)
 
 	return &meter{
@@ -80,10 +78,8 @@ func NewIOMeterProvider(ctx context.Context, svc string) (*meter, error) {
 	reader := metric.NewPeriodicReader(exp)
 	mp := metric.NewMeterProvider(
 		metric.WithReader(reader),
-		metric.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(svc),
-		)),
+		metric.WithResource(serviceResource(svc)),
+		metric.WithCardinalityLimit(noCardinalityLimit),
 	)
 
 	return &meter{
@@ -120,10 +116,8 @@ func NewOTLPMeterProvider(ctx context.Context, svc string) (*meter, error) {
 	reader := metric.NewPeriodicReader(exp)
 	mp := metric.NewMeterProvider(
 		metric.WithReader(reader),
-		metric.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(svc),
-		)),
+		metric.WithResource(serviceResource(svc)),
+		metric.WithCardinalityLimit(noCardinalityLimit),
 	)
 
 	return &meter{
@@ -132,6 +126,20 @@ func NewOTLPMeterProvider(ctx context.Context, svc string) (*meter, error) {
 			_ = exp.Shutdown(ctx)
 		},
 	}, nil
+}
+
+// noCardinalityLimit disables the SDK's per-instrument cardinality limit. The
+// OpenTelemetry metrics SDK applies a default of 2000 attribute sets per
+// instrument since v1.43 and folds the excess into otel.metric.overflow; the
+// previously vendored SDK applied no limit, and our account/function labelled
+// metrics (batch scheduling, connect durations) can exceed 2000 combinations.
+const noCardinalityLimit = 0
+
+func serviceResource(svc string) *resource.Resource {
+	return resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceNameKey.String(svc),
+	)
 }
 
 type meter struct {
