@@ -27,7 +27,7 @@ const config: StorybookConfig = {
       'react-dom': packageDir('react-dom'),
       'react-dom$': require.resolve('react-dom'),
       'react-dom/client': require.resolve('react-dom/client'),
-      'react-dom/server': require.resolve('react-dom/server'),
+      'react-dom/server': require.resolve('react-dom/server.browser'),
       'react-dom/test-utils': require.resolve('react-dom/test-utils'),
     };
     return webpackConfig;
