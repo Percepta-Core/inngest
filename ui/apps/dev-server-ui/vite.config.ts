@@ -74,7 +74,13 @@ export default defineConfig({
     },
     //
     // TODO: these can go away when all versions are aligned across monorepo
-    dedupe: ['next-themes', '@tanstack/react-query', 'react', 'react-dom'],
+    dedupe: [
+      'next-themes',
+      '@tanstack/react-query',
+      '@tanstack/react-router',
+      'react',
+      'react-dom',
+    ],
   },
   ssr: {
     noExternal: ['@reduxjs/toolkit', '@rtk-query/graphql-request-base-query'],
